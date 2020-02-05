@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>    
+    <link rel="stylesheet" type="text/css" href="main.css">    
+    <script src="node_modules/web3/dist/web3.min.js"></script>
+    <script src="contractABI.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ethereumjs/browser-builds/dist/ethereumjs-tx/ethereumjs-tx-1.3.3.min.js"></script>
+</head>
+
+<body>
+    <div class="container">        
+        <h1>Mon application de transfert de Token</h1>
+        <h2 id="instructor"></h2>
+    </div>   
+    
+        <div class="containerTransfer"  > 
+        <h1>Envoyer des KoffiCoin</h1>
+   
+        <label for="receiver">Destinataire:</label>
+        <select style="width: 55%" class="js-example-basic-single" name="state"></select>
+   
+        <label for="montant">Montant:</label>
+        <input type="text" id="montant" placeholder="e.g., 95" width="20%"></input>
+  
+        <button id="send">Envoyer des KoffiCoins</button>
+        <br><br>
+   
+        <span id="status"></span>
+</div> 
+
+    <div class="container">        
+        <h2 id="solde2"></h2>
+    </div>  
+
+    <div class="container">
+        <button onclick="GenerateTable()">Generate Table</button>
+        <hr />
+        <div id="dvTable"></div>
+    </div>
+
+    
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>    
+    <script>
+
+var url='http://127.0.0.1:7545';
+var web3= new Web3(url);
+var allAccountsAddressGeneral;
+
+web3.eth.getAccounts((err,allAccountsAddress) => {
+    if(err != null){
+        alert('Il y a eu des erreurs en cherchant les comptes');
+        return;
+    }
+    allAccountsAddressGeneral=allAccountsAddress;
+    console.log(allAccountsAddress);
+    for(j=0;j<5;j++){
+        newOption = new Option(allAccountsAddress[j],j, false, false);
+        $('.js-example-basic-single').append(newOption).trigger('change');
+    }   
+});
+
+var contractAddress = '0x3C688344c366A935797b1FE0D5A5d45Ec940203d';
+
+var contract = new web3.eth.Contract(contractABI,contractAddress);
+
+const account1='0x791386Cffe15F81729dA9Bb98fB71Eb049992DbC';
+const account2='0x688eEE0c511f02c71d941B6b25953A2252c3C6B1';
+
+const PRIVATE_KEY_1 ='9ab46152de84fb5c21929c34add35a47bb0cd875ff4f6aa456a6a947a53a2e7e';
+const PRIVATE_KEY_2 ='7fe8f7960ba1b5c3ad244167be3cbbf1ca49d32d9926aff48c9a841ae7a823f9';
+
+const privateKey1 = new ethereumjs.Buffer.Buffer.from(PRIVATE_KEY_1,'hex');
+const privateKey2 = new ethereumjs.Buffer.Buffer.from(PRIVATE_KEY_2,'hex');
+
+        //Recevoir le résultat
+       /* contract.methods.balanceof(account1).call((err,result)=>{
+            if(!err){
+                $("#instructor").html('Le solde du compte numéro 1 est: '+result);
+            }
+            console.log(err,result);
+         });*/
+refreshBalance(account1,1);
+
+
+$("#send").click(function() {
+
+    setStatus("Transaction en cours...")
+    var strUser=$(".js-example-basic-single :selected").text();
+    console.log(strUser);
+    const data=contract.methods.transfer(strUser,$("#montant").val()).encodeABI()
+    //const data=contract.methods.setInstructor($("#name").val(), $("#age").val()).encodeABI()
+            
+            //envoyer la transaction
+            web3.eth.getTransactionCount(account1,(err,txCount)=>{
+
+            const txObject = {
+                nonce: web3.utils.toHex(txCount),
+                gasLimit: web3.utils.toHex(800000),
+                gasPrice: web3.utils.toHex(web3.utils.toWei('10','gwei')),
+                to: contractAddress,
+                data: data
+            }
+
+            //Signer la transaction
+            const tx = new ethereumjs.Tx(txObject)
+            tx.sign(privateKey1)
+
+            //Serialiser la transaction
+            const serializedTx = tx.serialize()
+            const raw = '0x'+serializedTx.toString('hex')
+
+            //envoyer la transaction sérialisée et signée au réseau
+            web3.eth.sendSignedTransaction(raw,(err,txHash)=>{
+                if(!err){
+                    setStatus("Transaction réussie")
+                }
+                console.log('err:',err,'txHash:',txHash)
+            })
+        });
+
+        refreshBalance(strUser,2);
+        refreshBalance(account1,1);
+    });
+        
+////////Fonction pour afficher le statut de la transaction
+    function setStatus (message){
+    var status = document.getElementById("status");
+    status.innerHTML = message;
+    }
+
+
+    function refreshBalance(compteCible,elem){
+        
+        contract.methods.balanceof(compteCible).call((err,result)=>{
+            if(err!=null){
+                alert("erreur lors de la consultation du solde");
+                return
+            }       
+         }).then(function(value){
+             if(elem==1){
+                var instructor=document.getElementById("instructor");
+                instructor.innerHTML="Le compte 1 a pour solde: "+value.valueOf()+" KoffiCoin";
+             }else{
+                var instructor=document.getElementById("solde2");
+                instructor.innerHTML="Le compte a pour solde: "+value.valueOf()+" KoffiCoin";
+             }
+        });
+
+    }
+
+
+
+//Fonction pour générer le tableau des addresse et leurs soldes
+    function GenerateTable() {
+
+        //Build an array containing Customer records.
+        var customers = new Array();
+        customers.push(["Numero", "Adresse"]);
+
+        for(k=0;k<5;k++){
+            refreshBalance(allAccountsAddressGeneral[k]);
+            customers.push([k,allAccountsAddressGeneral[k]]);
+        }
+ 
+        //Create a HTML Table element.
+        var table = document.createElement("TABLE");
+        table.border = "1";
+ 
+        //Get the count of columns.
+        var columnCount = customers[0].length;
+ 
+        //Add the header row.
+        var row = table.insertRow(-1);
+        for (var i = 0; i < columnCount; i++) {
+            var headerCell = document.createElement("TH");
+            headerCell.innerHTML = customers[0][i];
+            row.appendChild(headerCell);
+        }
+ 
+        //Add the data rows.
+        for (var i = 1; i < customers.length; i++) {
+            row = table.insertRow(-1);
+            for (var j = 0; j < columnCount; j++) {
+                var cell = row.insertCell(-1);
+                cell.innerHTML = customers[i][j];
+            }
+        }
+ 
+        var dvTable = document.getElementById("dvTable");
+        dvTable.innerHTML = "";
+        dvTable.appendChild(table);
+    }
+
+    </script>
+    
+</body>
+</html>
